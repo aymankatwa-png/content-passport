@@ -243,6 +243,9 @@ body.trainer .app{display:none}
 .live{position:absolute;top:8px;left:12px;z-index:6;display:flex;gap:8px;align-items:center}
 .live .dot{font-size:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:99px;padding:6px 11px;color:rgba(255,255,255,.8)}
 .live .dot.ok{border-color:rgba(80,220,140,.5)}
+.rst{cursor:pointer;font-family:inherit}
+.rst.arm{background:#B3261E;color:#fff;border-color:#B3261E}
+.tclear.arm{background:#B3261E;border-color:#B3261E}
 .notes{background:var(--gold);color:#111;border-radius:99px;padding:6px 12px;font-size:13px;font-weight:700;display:none;animation:pulse2 1.5s infinite}
 .notes.on{display:block}
 @keyframes pulse2{50%{box-shadow:0 0 0 6px rgba(226,192,117,.25)}}
@@ -260,6 +263,7 @@ body.trainer .app{display:none}
     <div class="tt"><b class="goldtxt">جوازات المتدربين · بث مباشر</b><span id="tstats">بانتظار المتدربين…</span></div>
     <div class="clock" id="clock">15:00</div>
     <div class="tb"><button data-m="5">5</button><button data-m="10">10</button><button data-m="15">15</button><button data-m="0">⏹</button></div>
+    <button class="qrmini tclear" id="clearBtn" style="background:rgba(255,255,255,.08);color:#fff;font-weight:400">🗑 مسح الشاشة</button>
     <button class="qrmini" id="qrToggle">QR</button>
   </header>
   <div class="grid" id="grid"><div class="empty">📡 الشاشة متصلة. اطلب من المتدربين مسح الرمز (زر QR) — ستظهر أعمالهم هنا لحظة بلحظة.</div></div>
@@ -270,7 +274,7 @@ body.trainer .app{display:none}
 
 <div class="app">
   <div class="stage" id="stage">
-    <div class="live"><span class="dot" id="liveDot">📡 متصل بالمدرب</span><button class="notes" id="notesBtn">💬 ملاحظة من المدرب</button></div>
+    <div class="live"><span class="dot" id="liveDot">📡 متصل بالمدرب</span><button class="notes" id="notesBtn">💬 ملاحظة من المدرب</button><button class="dot rst" id="resetBtn">↺ من جديد</button></div>
     <div class="floor"></div>
     <div class="phone" id="phone"><div class="scr"><div class="pbar" id="pbar"></div><div class="viewer" id="viewer"></div><div class="post" id="post"></div></div></div>
     <div class="tilt" id="tilt">
@@ -1005,6 +1009,17 @@ function listenNotes(){
 $("#notesBtn").onclick=()=>{ $("#noteList").innerHTML=NOTES.map(n=>`<p>${esc(n.m)}</p>`).join(""); $("#notebox").classList.add("on"); };
 $("#noteClose").onclick=()=>$("#notebox").classList.remove("on");
 
+/* tap twice to confirm (no browser pop-ups) */
+function armed(btn, label, armedLabel, action){
+  btn.onclick=()=>{ if(btn.classList.contains("arm")){ action(); return; }
+    btn.classList.add("arm"); btn.textContent=armedLabel;
+    clearTimeout(btn._t); btn._t=setTimeout(()=>{ btn.classList.remove("arm"); btn.textContent=label; },3000); };
+}
+armed($("#resetBtn"),"↺ من جديد","اضغط مرة أخرى لمسح كل شيء",()=>{
+  try{ localStorage.removeItem(KEY); localStorage.removeItem("aud-dev"); }catch(e){}
+  location.reload();
+});
+
 /* =========================================================
    TRAINER DASHBOARD  (?trainer)
    ========================================================= */
@@ -1061,7 +1076,9 @@ function trainer(){
   async function sendFb(id){ const i=document.querySelector(`[data-fbin="${id}"]`), m=i.value.trim(); if(!m) return; i.value="";
     try{ const r=await fetch(`${RELAY}/${CONFIG.room}-fb-${id}`,{method:"POST",body:m}); if(!r.ok) throw 0; (P[id].sent=P[id].sent||[]).push(m); render(id); tickr("✓ وصلت الملاحظة"); }catch(_){ i.value=m; tickr("⚠️ لم تُرسل — حاول مجددًا"); } }
 
-  const es=new EventSource(`${RELAY}/${CONFIG.room}/sse?since=all`);
+  const CK="aud-clear-"+CONFIG.room; let since="all"; try{ since=localStorage.getItem(CK)||"all"; }catch(e){}
+  armed($("#clearBtn"),"🗑 مسح الشاشة","اضغط مرة أخرى للمسح",()=>{ try{ localStorage.setItem(CK,String(Math.floor(Date.now()/1000)+1)); }catch(e){} location.reload(); });
+  const es=new EventSource(`${RELAY}/${CONFIG.room}/sse?since=${since}`);
   es.onopen=()=>{ if(!Object.keys(P).length) $("#tstats").textContent="📡 متصل — بانتظار المتدربين…"; };
   es.onerror=()=>{ $("#tstats").textContent="⚠️ انقطع الاتصال… يعيد المحاولة"; };
   es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(_){ return; } if(ev.event!=="message") return;
